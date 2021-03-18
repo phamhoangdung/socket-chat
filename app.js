@@ -1,5 +1,7 @@
 const express = require('express');
 const app = express();
+const router = require('express').Router();
+require('dotenv').config();
 const path = require('path');
 const server = require('http').createServer(app);
 const io = require('socket.io')({ path: '/socket' }).listen(server);
@@ -7,26 +9,77 @@ const port = process.env.PORT || 1362;
 var siofu = require("socketio-file-upload");
 var fs = require("fs");
 const fetch = require('node-fetch');
-const Bearer = "Bearer cd q7ni48mbhl4wmt1ci97rukcjqu0fxyx2";
 
-const BASE_URL = 'https://hidden.kaspy.com/rest/V1/additional-api/'
+var serviceAccount = require(process.env.KEYNAME);
+const admin = require("firebase-admin");
+
+const Bearer = process.env.BEARER;
+const BASE_URL = process.env.BASE_URL
 
 server.listen(port, () => {
     console.log('Server listening at port %d', port);
 });
+
 // Routing
 app.use(express.static(path.join(__dirname, 'public')));
 
-app.use("/", (req, res) => {
+router.get("/", (req, res) => {
+    console.log("here");
     res.send("OK")
 })
+router.post("/notification", (req, res) => {
+    res.send(sendNotification(req.body.token, req.body.title, req.body.content, req.body.data));
+})
+
+app.use(router);
+
 
 var roomUsers = {};
-var customerRoom = "customerRoom";
-var adminRoom = "adminRoom";
-// app.use('/', function () {
-//     console.log("listening");
-// });
+
+admin.initializeApp({
+    credential: admin.credential.cert(serviceAccount),
+    databaseURL: process.env.FIREBASEURL
+})
+sendNotification = function (token, title, content, data) {
+    console.log(token);
+    return new Promise(async function (resolve, reject) {
+        try {
+            const msg = {
+                notification: { title: title, body: content },
+                tokens: token,
+                data: data,
+                apns: {
+                    headers: {
+                        'apns-priority': '10',
+                    },
+                    payload: {
+                        aps: {
+                            sound: 'default',
+                        }
+                    },
+                },
+                android: {
+                    priority: 'high',
+                    notification: {
+                        sound: 'default',
+                    }
+                },
+            }
+            admin.messaging().sendMulticast(msg)
+                .then(response => {
+                    console.log(response);
+                    if (response.responses[0].success) {
+                        resolve({ status: true, msg: "send notification success", result: response });
+                    } else {
+                        reject({ status: false, msg: "send notification fails" });
+                    }
+                })
+        } catch (error) {
+            console.log(error);
+            reject({ status: false, msg: "send notification fails", error: error.message });
+        }
+    })
+}
 
 io.on('connection', function (socket) {
     console.log("connection");
