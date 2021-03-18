@@ -3,18 +3,22 @@ const app = express();
 const router = require('express').Router();
 require('dotenv').config();
 const path = require('path');
+var bodyParser = require('body-parser');
 const server = require('http').createServer(app);
 const io = require('socket.io')({ path: '/socket' }).listen(server);
 const port = process.env.PORT || 1362;
+const fetch = require('node-fetch');
 var siofu = require("socketio-file-upload");
 var fs = require("fs");
-const fetch = require('node-fetch');
 
 var serviceAccount = require(process.env.KEYNAME);
 const admin = require("firebase-admin");
 
 const Bearer = process.env.BEARER;
 const BASE_URL = process.env.BASE_URL
+
+app.use(bodyParser.json());
+app.use(bodyParser.urlencoded({ extended: false }));
 
 server.listen(port, () => {
     console.log('Server listening at port %d', port);
@@ -27,12 +31,11 @@ router.get("/", (req, res) => {
     console.log("here");
     res.send("OK")
 })
-router.post("/notification", (req, res) => {
-    res.send(sendNotification(req.body.token, req.body.title, req.body.content, req.body.data));
+router.post("/api/notification", async (req, res) => {
+    res.status(200).json(await sendNotification(req.body.token, req.body.title, req.body.content, req.body.data));
 })
 
 app.use(router);
-
 
 var roomUsers = {};
 
@@ -71,12 +74,12 @@ sendNotification = function (token, title, content, data) {
                     if (response.responses[0].success) {
                         resolve({ status: true, msg: "send notification success", result: response });
                     } else {
-                        reject({ status: false, msg: "send notification fails" });
+                        resolve({ status: false, msg: "send notification fails" });
                     }
                 })
         } catch (error) {
             console.log(error);
-            reject({ status: false, msg: "send notification fails", error: error.message });
+            resolve({ status: false, msg: "send notification fails", error: error.message });
         }
     })
 }
